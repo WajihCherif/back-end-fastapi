@@ -15,6 +15,96 @@ from app.services.user_service import UserService
 router = APIRouter(prefix="/users", tags=["Users"])
 user_service = UserService()
 
+# ── Static routes first (must be before /{user_id}) ──────────────────────────
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register_user(
+    user: UserCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new user
+    """
+    try:
+        return user_service.create_user(db, user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.post("/login", response_model=Token)
+def login(
+    user_login: UserLogin,
+    db: Session = Depends(get_db)
+):
+    """
+    User login - returns JWT token
+    """
+    user = user_service.authenticate_user(db, user_login.username, user_login.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = user_service.create_access_token(
+        data={"sub": user.username, "user_id": user.id, "role": user.role}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@router.get("/by-username/{username}", response_model=UserResponse)
+def get_user_by_username(
+    username: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get user by username
+    """
+    user = user_service.get_user_by_username(db, username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
+
+@router.get("/by-email/{email}", response_model=UserResponse)
+def get_user_by_email(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get user by email
+    """
+    user = user_service.get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
+
+# ── CRUD routes ───────────────────────────────────────────────────────────────
+
+@router.get("/", response_model=List[UserResponse])
+def get_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all users with pagination and search
+    """
+    return user_service.get_users(db, skip=skip, limit=limit, search=search)
+
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
@@ -30,18 +120,6 @@ def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-
-@router.get("/", response_model=List[UserResponse])
-def get_users(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
-    search: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """
-    Get all users with pagination and search
-    """
-    return user_service.get_users(db, skip=skip, limit=limit, search=search)
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(
@@ -92,61 +170,4 @@ def delete_user(
         )
     return None
 
-@router.post("/login", response_model=Token)
-def login(
-    user_login: UserLogin,
-    db: Session = Depends(get_db)
-):
-    """
-    User login - returns JWT token
-    """
-    user = user_service.authenticate_user(db, user_login.username, user_login.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Create access token
-    access_token = user_service.create_access_token(
-        data={"sub": user.username, "user_id": user.id, "role": user.role}
-    )
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user
-    }
-
-@router.get("/by-username/{username}", response_model=UserResponse)
-def get_user_by_username(
-    username: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Get user by username
-    """
-    user = user_service.get_user_by_username(db, username)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return user
-
-@router.get("/by-email/{email}", response_model=UserResponse)
-def get_user_by_email(
-    email: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Get user by email
-    """
-    user = user_service.get_user_by_email(db, email)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return user
+# (login and register moved above /{user_id} — see top of file)
