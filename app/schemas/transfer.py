@@ -24,10 +24,10 @@ class TransferHistory(BaseModel):
     id: int
     product_id: int
     product_name: str
-    from_depot_id: int
-    from_depot_name: str
-    to_etagere_id: int
-    to_etagere_name: str
+    from_depot_id: Optional[int] = None
+    from_depot_name: Optional[str] = None
+    to_etagere_id: Optional[int] = None
+    to_etagere_name: Optional[str] = None
     quantity: int
     notes: Optional[str]
     transferred_at: datetime

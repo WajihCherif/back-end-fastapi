@@ -8,6 +8,7 @@ from app.services.transfer_service import TransferService
 from app.models.product import Product
 from app.models.depot import Depot
 from app.models.etagere import Etagere
+from app.models.stock import Stock
 
 router = APIRouter(prefix="/transfers", tags=["Transfers"])
 transfer_service = TransferService()
@@ -71,9 +72,9 @@ def get_available_shelves(
             "etagere_code": shelf.etagere_code,
             "name": shelf.name,
             "depot_id": shelf.depot_id,
-            "current_quantity": shelf.quantity or 0,
+            "current_quantity": shelf.quantity_etagere or 0,
             "max_capacity": shelf.max_capacity,
-            "available_space": shelf.max_capacity - (shelf.quantity or 0),
+            "available_space": shelf.max_capacity - (shelf.quantity_etagere or 0),
             "current_product_id": shelf.product_id
         })
     
@@ -96,13 +97,17 @@ def get_available_products(
             Etagere.product_id == product.id
         ).all()
         
-        total_on_shelves = sum(s.quantity or 0 for s in shelf_stock)
+        total_on_shelves = sum(s.quantity_etagere or 0 for s in shelf_stock)
+        
+        # Get barcode from Stock table
+        stock_entry = db.query(Stock).filter(Stock.product_id == product.id).first()
+        barcode = stock_entry.barcode if stock_entry else None
         
         result.append({
             "id": product.id,
             "name": product.name,
             "product_code": product.product_code,
-            "barcode": product.barcode,
+            "barcode": barcode,
             "price": product.price,
             "total_on_shelves": total_on_shelves
         })
@@ -133,11 +138,22 @@ def get_depot_stock(
                     "quantity": 0,
                     "shelves": []
                 }
-            stock_by_product[shelf.product_id]["quantity"] += shelf.quantity or 0
+            stock_by_product[shelf.product_id]["quantity"] += shelf.quantity_etagere or 0
             stock_by_product[shelf.product_id]["shelves"].append({
                 "shelf_id": shelf.id,
                 "shelf_name": shelf.name,
-                "quantity": shelf.quantity or 0
+                "quantity": shelf.quantity_etagere or 0
             })
     
     return list(stock_by_product.values())
+
+@router.get("/history", response_model=List[TransferHistory])
+def get_transfer_history(
+    limit: int = Query(50, ge=1, le=100),
+    product_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get history of all product transfers
+    """
+    return transfer_service.get_transfer_history(db, limit=limit, product_id=product_id)

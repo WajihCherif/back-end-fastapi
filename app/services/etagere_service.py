@@ -58,7 +58,7 @@ class EtagereService:
             "product_code": product.product_code if product else None,
             "name": etagere.name,
             "section": etagere.section,
-            "quantity": etagere.quantity,
+            "quantity": etagere.quantity_etagere,
             "max_capacity": etagere.max_capacity,
             "last_restocked": etagere.last_restocked,
             "last_updated": etagere.last_updated
@@ -129,7 +129,7 @@ class EtagereService:
         if not etagere:
             return None
         
-        etagere.quantity = new_quantity
+        etagere.quantity_etagere = new_quantity
         etagere.last_updated = datetime.now()
         
         db.commit()
@@ -141,7 +141,7 @@ class EtagereService:
         if not etagere:
             return None
         
-        etagere.quantity = etagere.max_capacity
+        etagere.quantity_etagere = etagere.max_capacity
         etagere.last_restocked = datetime.now()
         etagere.last_updated = datetime.now()
         

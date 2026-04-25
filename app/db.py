@@ -14,7 +14,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # If DATABASE_URL is None or empty, use default for XAMPP
 if not DATABASE_URL:
-    print("⚠️  DATABASE_URL not found in .env, using default for XAMPP")
+    print("WARNING: DATABASE_URL not found in .env, using default for XAMPP")
     DATABASE_URL = "mysql+pymysql://root:@localhost:3306/stock_monitoring"
     print(f"Using: {DATABASE_URL}")
 
@@ -28,9 +28,9 @@ try:
         pool_recycle=3600,
         echo=True,  # Set to False in production
     )
-    print("✅ Database engine created successfully")
+    print("SUCCESS: Database engine created successfully")
 except Exception as e:
-    print(f"❌ Failed to create database engine: {e}")
+    print(f"ERROR: Failed to create database engine: {e}")
     sys.exit(1)
 
 # Create SessionLocal

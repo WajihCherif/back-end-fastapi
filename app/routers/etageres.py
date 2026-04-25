@@ -87,7 +87,7 @@ def update_stock(
     etagere = etagere_service.update_stock(db, etagere_code, quantity)
     if not etagere:
         raise HTTPException(status_code=404, detail="Etagere not found")
-    return {"message": "Stock updated", "etagere_code": etagere_code, "new_quantity": etagere.quantity}
+    return {"message": "Stock updated", "etagere_code": etagere_code, "new_quantity": etagere.quantity_etagere}
 
 @router.post("/{etagere_code}/restock")
 def restock_etagere(
@@ -97,7 +97,7 @@ def restock_etagere(
     etagere = etagere_service.restock_etagere(db, etagere_code)
     if not etagere:
         raise HTTPException(status_code=404, detail="Etagere not found")
-    return {"message": "Etagere restocked", "etagere_code": etagere_code, "quantity": etagere.quantity}
+    return {"message": "Etagere restocked", "etagere_code": etagere_code, "quantity": etagere.quantity_etagere}
 
 @router.delete("/{etagere_id}", status_code=204)
 def delete_etagere(

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional, List
 from app.models.product import Product
+from app.models.stock import Stock
 from app.schemas.product import ProductCreate, ProductUpdate
 
 class ProductService:
@@ -13,7 +14,10 @@ class ProductService:
         return db.query(Product).filter(Product.product_code == product_code).first()
     
     def get_product_by_barcode(self, db: Session, barcode: str) -> Optional[Product]:
-        return db.query(Product).filter(Product.barcode == barcode).first()
+        stock_entry = db.query(Stock).filter(Stock.barcode == barcode).first()
+        if stock_entry:
+            return self.get_product(db, stock_entry.product_id)
+        return None
     
     def get_products(
         self, 
@@ -29,7 +33,6 @@ class ProductService:
                 or_(
                     Product.name.contains(search),
                     Product.product_code.contains(search),
-                    Product.barcode.contains(search),
                     Product.category.contains(search)
                 )
             )
@@ -41,10 +44,6 @@ class ProductService:
         if existing:
             raise ValueError(f"Product with code {product.product_code} already exists")
         
-        if product.barcode:
-            existing_barcode = self.get_product_by_barcode(db, product.barcode)
-            if existing_barcode:
-                raise ValueError(f"Product with barcode {product.barcode} already exists")
         
         db_product = Product(**product.model_dump())
         db.add(db_product)
@@ -69,10 +68,6 @@ class ProductService:
             if existing and existing.id != product_id:
                 raise ValueError(f"Product with code {update_data['product_code']} already exists")
         
-        if "barcode" in update_data and update_data["barcode"]:
-            existing = self.get_product_by_barcode(db, update_data["barcode"])
-            if existing and existing.id != product_id:
-                raise ValueError(f"Product with barcode {update_data['barcode']} already exists")
         
         for field, value in update_data.items():
             setattr(db_product, field, value)

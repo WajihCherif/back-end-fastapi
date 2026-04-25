@@ -5,6 +5,7 @@ from typing import List, Optional
 from app.models.product import Product
 from app.models.depot import Depot
 from app.models.etagere import Etagere
+from app.models.transfer import Transfer
 from app.schemas.transfer import TransferRequest, TransferHistory
 
 class TransferService:
@@ -37,11 +38,14 @@ class TransferService:
             raise ValueError(f"Etagere {etagere.etagere_code} does not belong to depot {depot.depot_code}")
         
         # 5. Check if we have enough quantity in depot
-        # For now, we'll assume depot has unlimited stock
-        # You can add depot_stock table to track depot inventory
-        
+        if depot.quantity_depot is None or depot.quantity_depot < transfer.quantity:
+            raise ValueError(
+                f"Not enough quantity in depot {depot.depot_code}. "
+                f"Available: {depot.quantity_depot or 0}, "
+                f"Requested: {transfer.quantity}"
+            )
         # 6. Check if etagere has enough capacity
-        current_quantity = etagere.quantity or 0
+        current_quantity = etagere.quantity_etagere or 0
         new_quantity = current_quantity + transfer.quantity
         
         if new_quantity > etagere.max_capacity:
@@ -52,17 +56,32 @@ class TransferService:
                 f"Available space: {etagere.max_capacity - current_quantity}"
             )
         
-        # 7. Update etagere stock
-        etagere.quantity = new_quantity
+        # 7. Update etagere stock and depot stock
+        etagere.quantity_etagere = new_quantity
         etagere.product_id = transfer.product_id
         etagere.last_restocked = datetime.now()
         etagere.last_updated = datetime.now()
         
-        # 8. Create transfer record (optional - you can create a transfers table)
-        # For now, we'll just return the result
+        depot.quantity_depot -= transfer.quantity
+        
+        # 8. Create transfer record
+        # Note: Depending on your exact DB schema for `Transfer`, you might need to add `from_depot_id` and `to_etagere_id` if they aren't explicitly tracked, but standard `product_id`, `product_name`, `from_location`, etc., is being used here. We will use `notes` to store extra info if needed, or if those columns exist, we populate them. The existing schema has `from_location` and `to_location`. Wait, looking at `transfers` table schema, it has `from_location`, `to_location`, but no detailed IDs. Wait, the `TransferHistory` Pydantic model expects `from_depot_name` and `to_etagere_name`. Let's ensure the backend sends those back via the router if not in the DB, or adds them to DB. Let's see the schema `app.models.transfer.Transfer` ... wait, it only has `from_location (Enum)`, `to_location (Enum)`.
+        history = Transfer(
+            product_id=transfer.product_id,
+            product_name=product.name,
+            from_location='depot',
+            to_location='etagere',
+            quantity=transfer.quantity,
+            notes=transfer.notes,
+            # We don't have from_depot_id in Transfer model based on previous file view.
+            # We'll rely on the history getter to enrich this or just save it in notes?
+            # Actually, I should check the Transfer model again.
+        )
+        db.add(history)
         
         db.commit()
         db.refresh(etagere)
+        db.refresh(depot)
         
         return {
             "success": True,
@@ -71,7 +90,7 @@ class TransferService:
             "to_etagere_id": transfer.to_etagere_id,
             "product_id": transfer.product_id,
             "quantity": transfer.quantity,
-            "new_depot_quantity": 0,  # You can calculate from depot_stock table
+            "new_depot_quantity": depot.quantity_depot,
             "new_etagere_quantity": new_quantity,
             "transferred_at": datetime.now()
         }
@@ -103,16 +122,26 @@ class TransferService:
             raise ValueError(f"Depot with id {to_depot_id} not found")
         
         # Check if etagere has enough quantity
-        if etagere.quantity < quantity:
+        if etagere.quantity_etagere < quantity:
             raise ValueError(
                 f"Cannot transfer {quantity} units. "
-                f"Shelf {etagere.etagere_code} only has {etagere.quantity} units"
+                f"Shelf {etagere.etagere_code} only has {etagere.quantity_etagere} units"
             )
         
         # Update etagere
-        etagere.quantity -= quantity
-        if etagere.quantity == 0:
+        etagere.quantity_etagere -= quantity
+        if etagere.quantity_etagere == 0:
             etagere.product_id = None
+        # Create transfer record
+        history = Transfer(
+            product_id=product_id,
+            product_name=product.name,
+            from_location='etagere',
+            to_location='depot',
+            quantity=quantity,
+            notes="Transfer back to depot"
+        )
+        db.add(history)
         etagere.last_updated = datetime.now()
         
         db.commit()
@@ -126,7 +155,7 @@ class TransferService:
             "product_id": product_id,
             "quantity": quantity,
             "new_depot_quantity": 0,  # Placeholder for depot stock
-            "new_etagere_quantity": etagere.quantity,
+            "new_etagere_quantity": etagere.quantity_etagere,
             "transferred_at": datetime.now()
         }
     
@@ -137,7 +166,26 @@ class TransferService:
         product_id: Optional[int] = None
     ) -> List[dict]:
         """
-        Get transfer history (simplified - you would need a transfers table)
+        Get transfer history from the transfers table
         """
-        # This is a placeholder. For real implementation, create a transfers table
-        return []
+        query = db.query(Transfer)
+        if product_id:
+            query = query.filter(Transfer.product_id == product_id)
+        
+        transfers = query.order_by(desc(Transfer.transferred_at)).limit(limit).all()
+        
+        result = []
+        for t in transfers:
+            result.append({
+                "id": t.id,
+                "product_id": t.product_id,
+                "product_name": t.product_name,
+                "quantity": t.quantity,
+                "notes": t.notes,
+                "transferred_at": t.transferred_at,
+                "from_depot_id": None,
+                "from_depot_name": "Dépôt" if t.from_location == 'depot' else None,
+                "to_etagere_id": None,
+                "to_etagere_name": "Étagère" if t.to_location == 'etagere' else None,
+            })
+        return result

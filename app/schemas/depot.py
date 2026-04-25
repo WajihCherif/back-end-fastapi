@@ -9,6 +9,7 @@ class DepotBase(BaseModel):
     address: Optional[str] = None
     manager_name: Optional[str] = None
     phone: Optional[str] = None
+    quantity_depot: Optional[int] = 0
 
 class DepotCreate(DepotBase):
     pass
@@ -20,6 +21,7 @@ class DepotUpdate(BaseModel):
     address: Optional[str] = None
     manager_name: Optional[str] = None
     phone: Optional[str] = None
+    quantity_depot: Optional[int] = None
 
 class DepotResponse(DepotBase):
     id: int

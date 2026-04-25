@@ -8,7 +8,7 @@ class EtagereBase(BaseModel):
     product_id: Optional[int] = None
     name: str = Field(..., min_length=1, max_length=100)
     section: Optional[str] = None
-    quantity: int = 0
+    quantity_etagere: int = 0
     max_capacity: int = 100
 
 class EtagereCreate(EtagereBase):
@@ -20,7 +20,7 @@ class EtagereUpdate(BaseModel):
     product_id: Optional[int] = None
     name: Optional[str] = None
     section: Optional[str] = None
-    quantity: Optional[int] = None
+    quantity_etagere: Optional[int] = None
     max_capacity: Optional[int] = None
 
 class EtagereResponse(EtagereBase):

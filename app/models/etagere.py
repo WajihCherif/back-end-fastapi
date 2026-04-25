@@ -12,7 +12,7 @@ class Etagere(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     name = Column(String(100), nullable=False)
     section = Column(String(50))
-    quantity = Column(Integer, default=0)
+    quantity_etagere = Column(Integer, default=0)
     max_capacity = Column(Integer, default=100)
     last_restocked = Column(DateTime(timezone=True), nullable=True)
     last_updated = Column(DateTime(timezone=True), onupdate=func.now())

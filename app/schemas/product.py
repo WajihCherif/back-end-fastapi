@@ -7,7 +7,6 @@ class ProductBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     category: Optional[str] = None
-    barcode: Optional[str] = None
     price: Optional[float] = None
     unit: str = "piece"
 
@@ -19,7 +18,6 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
-    barcode: Optional[str] = None
     price: Optional[float] = None
     unit: Optional[str] = None
 

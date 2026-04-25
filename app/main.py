@@ -4,7 +4,7 @@ import uvicorn
 import sys
 
 from app.db import engine, Base
-from app.routers import users, products, depots, etageres, transfer
+from app.routers import users, products, depots, etageres, transfer, stock, alerts
 
 # Create FastAPI app
 app = FastAPI(
@@ -27,9 +27,9 @@ async def init_db():
     try:
         print("Creating database tables...")
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables created successfully")
+        print("SUCCESS: Database tables created successfully")
     except Exception as e:
-        print(f"❌ Failed to create database tables: {e}")
+        print(f"ERROR: Failed to create database tables: {e}")
         print("Please check your database connection and make sure MySQL is running")
         # Don't exit, let the app start but with warning
 
@@ -39,6 +39,8 @@ app.include_router(products.router)
 app.include_router(depots.router)
 app.include_router(etageres.router)
 app.include_router(transfer.router)
+app.include_router(stock.router)
+app.include_router(alerts.router)
 
 @app.get("/")
 def root():

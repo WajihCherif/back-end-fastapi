@@ -12,4 +12,5 @@ class Depot(Base):
     address = Column(Text)
     manager_name = Column(String(100))
     phone = Column(String(20))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    quantity_depot = Column(Integer, default=0)
+    
