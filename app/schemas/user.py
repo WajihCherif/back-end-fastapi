@@ -5,14 +5,14 @@ from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    MANAGER = "manager"
+    RESPONSIBLE = "responsible"
 
 # Base User Schema
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     full_name: Optional[str] = None
-    role: UserRole = UserRole.MANAGER
+    role: UserRole = UserRole.RESPONSIBLE
     is_active: bool = True
 
 # Create User (Request)

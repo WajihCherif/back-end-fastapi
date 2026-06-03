@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.db import get_db
-from app.schemas.stock import StockResponse, StockUpdate
+from app.schemas.stock import StockResponse, StockUpdate, AddStockRequest
 from app.services.stock_service import StockService
 
 router = APIRouter(prefix="/stock", tags=["Stock"])
@@ -47,3 +47,13 @@ def update_stock(
     if not stock:
         raise HTTPException(status_code=404, detail="Stock entry not found")
     return stock
+
+@router.post("/add")
+def add_stock(
+    request: AddStockRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        return stock_service.add_stock(db, request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

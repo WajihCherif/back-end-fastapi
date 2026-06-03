@@ -17,3 +17,8 @@ class StockResponse(StockBase):
 
     class Config:
         from_attributes = True
+
+class AddStockRequest(BaseModel):
+    product_id: int
+    depot_id: int
+    quantity: int

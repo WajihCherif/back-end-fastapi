@@ -8,14 +8,16 @@ from app.schemas.user import (
     UserUpdate, 
     UserResponse, 
     UserLogin, 
-    Token
+    Token,
+    UserRole
 )
 from app.services.user_service import UserService
+from app.core.security import admin_only
 
 router = APIRouter(prefix="/users", tags=["Users"])
 user_service = UserService()
 
-# ── Static routes first (must be before /{user_id}) ──────────────────────────
+# ── Static routes (Public or Common) ──────────────────────────────────────────
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
@@ -23,9 +25,11 @@ def register_user(
     db: Session = Depends(get_db)
 ):
     """
-    Register a new user
+    Register a new user (default role: responsible)
     """
     try:
+        # Force the role to RESPONSIBLE for public registration
+        user.role = UserRole.RESPONSIBLE
         return user_service.create_user(db, user)
     except ValueError as e:
         raise HTTPException(
@@ -98,7 +102,8 @@ def get_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     search: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin = Depends(admin_only)
 ):
     """
     Get all users with pagination and search
@@ -108,7 +113,8 @@ def get_users(
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin = Depends(admin_only)
 ):
     """
     Create a new user
@@ -141,7 +147,8 @@ def get_user(
 def update_user(
     user_id: int,
     user_update: UserUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin = Depends(admin_only)
 ):
     """
     Update user by ID
@@ -157,7 +164,8 @@ def update_user(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin = Depends(admin_only)
 ):
     """
     Delete user by ID

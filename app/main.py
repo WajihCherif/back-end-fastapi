@@ -4,7 +4,8 @@ import uvicorn
 import sys
 
 from app.db import engine, Base
-from app.routers import users, products, depots, etageres, transfer, stock, alerts
+from app.routers import users, products, depots, etageres, transfer, stock, alerts, yolo
+from app.routers.detection import router as detection_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -41,6 +42,9 @@ app.include_router(etageres.router)
 app.include_router(transfer.router)
 app.include_router(stock.router)
 app.include_router(alerts.router)
+app.include_router(yolo.router)
+app.include_router(detection_router)
+
 
 @app.get("/")
 def root():

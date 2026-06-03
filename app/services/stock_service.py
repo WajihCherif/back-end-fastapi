@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.models.stock import Stock
-from app.schemas.stock import StockUpdate
+from app.models.depot import Depot
+from app.models.product import Product
+from app.schemas.stock import StockUpdate, AddStockRequest
 
 class StockService:
     
@@ -42,3 +44,41 @@ class StockService:
         db.commit()
         db.refresh(stock)
         return stock
+
+    def add_stock(self, db: Session, request: AddStockRequest) -> dict:
+        product = db.query(Product).filter(Product.id == request.product_id).first()
+        if not product:
+            raise ValueError("Product not found")
+            
+        depot = db.query(Depot).filter(Depot.id == request.depot_id).first()
+        if not depot:
+            raise ValueError("Depot not found")
+            
+        # Update depot stock
+        if depot.quantity_depot is None:
+            depot.quantity_depot = 0
+        depot.quantity_depot += request.quantity
+        
+        # Update or create global product stock
+        stock = self.get_stock_by_product(db, request.product_id)
+        if stock:
+            stock.quantity_stock += request.quantity
+        else:
+            stock = Stock(
+                product_id=request.product_id,
+                product_name=product.name,
+                barcode=product.product_code, # Use code as default barcode if not set
+                quantity_stock=request.quantity
+            )
+            db.add(stock)
+            
+        db.commit()
+        db.refresh(depot)
+        db.refresh(stock)
+        
+        return {
+            "success": True,
+            "message": f"Successfully added {request.quantity} units to {depot.name} for product {product.name}",
+            "new_depot_quantity": depot.quantity_depot,
+            "new_stock_quantity": stock.quantity_stock
+        }
