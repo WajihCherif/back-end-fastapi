@@ -162,6 +162,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     state_change_time=s.get('missing_since'),
                                     timeout_minutes=timeout_minutes,
                                     etagere_id=et.id if et else None,
+                                    etagere_code=et.etagere_code if et else key,
                                     stock_id=None,
                                     depot_id=et.depot_id if et else None
                                 )

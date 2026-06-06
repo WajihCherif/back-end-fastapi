@@ -4,12 +4,13 @@ from typing import List, Optional
 
 from app.db import get_db
 from app.schemas.user import (
-    UserCreate, 
-    UserUpdate, 
-    UserResponse, 
-    UserLogin, 
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserLogin,
     Token,
-    UserRole
+    UserRole,
+    AdminUserCreate,
 )
 from app.services.user_service import UserService
 from app.core.security import admin_only
@@ -32,10 +33,16 @@ def register_user(
         user.role = UserRole.RESPONSIBLE
         return user_service.create_user(db, user)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        # Return structured error info for client-side display
+        detail = {"message": str(e)}
+        # Map common messages to fields
+        if 'Username' in str(e):
+            detail['field'] = 'username'
+        if 'Email' in str(e):
+            detail['field'] = 'email'
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"message": "Internal server error"})
 
 @router.post("/login", response_model=Token)
 def login(
@@ -112,7 +119,7 @@ def get_users(
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
-    user: UserCreate,
+    user: AdminUserCreate,
     db: Session = Depends(get_db),
     current_admin = Depends(admin_only)
 ):
@@ -120,12 +127,17 @@ def create_user(
     Create a new user
     """
     try:
+        # user_service.create_user expects a UserCreate-like object; AdminUserCreate provides compatible attributes
         return user_service.create_user(db, user)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        detail = {"message": str(e)}
+        if 'Username' in str(e):
+            detail['field'] = 'username'
+        if 'Email' in str(e):
+            detail['field'] = 'email'
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"message": "Internal server error"})
 
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(

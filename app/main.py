@@ -4,8 +4,18 @@ import uvicorn
 import sys
 
 from app.db import engine, Base
-from app.routers import users, products, depots, etageres, transfer, stock, alerts, yolo
-from app.routers.detection import router as detection_router
+from app.routers import users, products, depots, etageres, transfer, stock, alerts
+
+# Conditionally import heavy detection/Yolo routers (cv2 / ultralytics may be missing)
+try:
+    from app.routers import yolo
+except Exception as _e:
+    yolo = None
+
+try:
+    from app.routers.detection import router as detection_router
+except Exception as _e:
+    detection_router = None
 
 # Create FastAPI app
 app = FastAPI(
@@ -42,8 +52,31 @@ app.include_router(etageres.router)
 app.include_router(transfer.router)
 app.include_router(stock.router)
 app.include_router(alerts.router)
-app.include_router(yolo.router)
-app.include_router(detection_router)
+if yolo is not None:
+    try:
+        app.include_router(yolo.router)
+    except Exception as e:
+        print('YOLO router not included:', e)
+
+if detection_router is not None:
+    try:
+        app.include_router(detection_router)
+    except Exception as e:
+        print('Detection router not included:', e)
+
+
+# Start background removal watch runner
+@app.on_event("startup")
+async def start_removal_watch_runner():
+    try:
+        from app.routers.detection import removal_watch_runner
+        import asyncio
+        loop = asyncio.get_event_loop()
+        # schedule background task
+        loop.create_task(removal_watch_runner(app))
+        print("Removal watch runner started")
+    except Exception as e:
+        print("Failed to start removal watch runner:", e)
 
 
 @app.get("/")

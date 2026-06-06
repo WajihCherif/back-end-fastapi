@@ -5,5 +5,6 @@ from app.models.etagere import Etagere
 from app.models.stock import Stock
 from app.models.alert import Alert
 from app.models.transfer import Transfer
+from app.models.removal_watch import RemovalWatch
 
-__all__ = ["User", "UserRole", "Product", "Depot", "Etagere", "Stock", "Alert", "Transfer"]
+__all__ = ["User", "UserRole", "Product", "Depot", "Etagere", "Stock", "Alert", "Transfer", "RemovalWatch"]

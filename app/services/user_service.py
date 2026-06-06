@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 
 from app.models.user import User, UserRole
+from sqlalchemy.exc import IntegrityError
 from app.schemas.user import UserCreate, UserUpdate
 
 load_dotenv()
@@ -86,11 +87,16 @@ class UserService:
             is_active=user.is_active
         )
         
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        
-        return db_user
+        try:
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+            return db_user
+        except IntegrityError as ie:
+            db.rollback()
+            # Provide a clearer message for unique constraint failures
+            # The existing checks above should catch most cases, but DB constraints can still trigger
+            raise ValueError("Unable to create user due to a database constraint.")
     
     def update_user(
         self, 

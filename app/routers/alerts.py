@@ -74,6 +74,7 @@ def create_manual_alert(
         stock_id=stock_id,
         etagere_id=etagere_id,
         depot_id=depot_id,
+        etagere_code=getattr(alert_data, 'etagere_code', None),
         boxes_missing_count=alert_data.boxes_missing_count,
         state_change_time=alert_data.state_change_time,
         timeout_minutes=alert_data.timeout_minutes

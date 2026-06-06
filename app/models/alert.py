@@ -32,6 +32,8 @@ class Alert(Base):
     stock_id = Column(Integer, ForeignKey("stock.id"), nullable=True)
     etagere_id = Column(Integer, ForeignKey("etagere.id"), nullable=True)
     depot_id = Column(Integer, ForeignKey("depot.id"), nullable=True)
+    # Human-friendly shelf code snapshot
+    etagere_code = Column(String(50), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

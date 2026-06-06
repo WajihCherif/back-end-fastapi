@@ -13,6 +13,7 @@ class AlertBase(BaseModel):
     quantity_stock: int = 0
     quantity_etagere: int = 0
     quantity_depot: int = 0
+    etagere_code: Optional[str] = None
     boxes_missing_count: int = 0  # For box_missing alerts
     state_change_time: Optional[datetime] = None  # When count changed
     timeout_minutes: int = 5  # Default timeout
@@ -22,6 +23,7 @@ class AlertCreate(AlertBase):
 
 class AlertResponse(AlertBase):
     id: int
+    etagere_code: Optional[str] = None
     stock_id: Optional[int] = None
     etagere_id: Optional[int] = None
     depot_id: Optional[int] = None

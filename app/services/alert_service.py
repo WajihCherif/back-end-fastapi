@@ -42,7 +42,8 @@ class AlertService:
         depot_id: Optional[int] = None,
         boxes_missing_count: int = 0,
         state_change_time: Optional[datetime] = None,
-        timeout_minutes: int = 5
+        timeout_minutes: int = 5,
+        etagere_code: Optional[str] = None
     ) -> Alert:
         alert = Alert(
             product_id=product_id,
@@ -58,6 +59,7 @@ class AlertService:
             stock_id=stock_id,
             etagere_id=etagere_id,
             depot_id=depot_id,
+            etagere_code=etagere_code,
             boxes_missing_count=boxes_missing_count,
             state_change_time=state_change_time or datetime.now(datetime.now().astimezone().tzinfo),
             timeout_minutes=timeout_minutes

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -13,7 +13,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     role: UserRole = UserRole.RESPONSIBLE
-    is_active: bool = True
+    is_active: Optional[bool] = True
 
 # Create User (Request)
 class UserCreate(UserBase):
@@ -22,7 +22,7 @@ class UserCreate(UserBase):
 # Update User (Request)
 class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=50)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     full_name: Optional[str] = None
     password: Optional[str] = Field(None, min_length=6, max_length=100)
     role: Optional[UserRole] = None
@@ -48,6 +48,16 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+
+
+# Admin-only create user schema (validates email and allows role assignment)
+class AdminUserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    full_name: Optional[str] = None
+    password: str = Field(..., min_length=6, max_length=100)
+    role: UserRole = UserRole.RESPONSIBLE
+    is_active: Optional[bool] = True
 
 class TokenData(BaseModel):
     username: Optional[str] = None
