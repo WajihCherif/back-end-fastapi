@@ -12,6 +12,8 @@ from app.services.alert_service import AlertService
 from app.models.etagere import Etagere
 # pyrefly: ignore [missing-import]
 from ultralytics import YOLO
+from app.services.ai_service import AIService
+import time
 import json
 import os
 
@@ -20,19 +22,8 @@ router = APIRouter(
     tags=["yolo"]
 )
 
-# Load the trained YOLOv8-OBB model (empty shelf detection)
-MODEL_PATH = (
-    "C:/Users/wajih/Empty spaces in a supermarket hanger.v29i.yolov8-obb"
-    "/runs/detect/train/weights/best.pt"
-)
-model = YOLO(MODEL_PATH)
+ai_service = AIService()
 
-# Load standard YOLOv8 model for person detection (COCO class 0: person)
-COCO_MODEL_PATH = "C:/Users/wajih/Empty spaces in a supermarket hanger.v29i.yolov8-obb/yolov8n.pt"
-if os.path.exists(COCO_MODEL_PATH):
-    person_model = YOLO(COCO_MODEL_PATH)
-else:
-    person_model = YOLO("yolov8n.pt")
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -65,55 +56,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"error": "Invalid image data"})
                 continue
 
-            # Run inference
-            results = model(img, verbose=False)
+            # Run inference via AIService
+            # To avoid overloading CPU, we only run CLIP once every 1 second per camera.
+            state = camera_states.get(cam_key, {})
+            last_clip_time = state.get('last_clip_time', 0)
+            current_time = time.time()
+            run_clip = False
             
-            # Run person detection
-            person_results = person_model(img, verbose=False)
-            has_person = False
-            for r in person_results:
-                if r.boxes is not None and len(r.boxes) > 0:
-                    cls = r.boxes.cls.cpu().numpy()
-                    if 0 in cls:  # 0 is the COCO class for 'person'
-                        has_person = True
-                        break
+            if current_time - last_clip_time >= 1.0:
+                run_clip = True
+                state['last_clip_time'] = current_time
+                # Store back state later
+
+            inference_results = ai_service.predict_frame(img, run_clip=run_clip)
             
-            detections = []
-            for r in results:
-                # ── OBB model path ──────────────────────────────────
-                # r.obb is not None only when the model is an OBB model
-                # AND it detected something. An empty tensor is falsy,
-                # so we must check `is not None` first, then `len > 0`.
-                if r.obb is not None and len(r.obb) > 0:
-                    boxes = r.obb.xyxyxyxy.cpu().numpy()  # (N, 4, 2)
-                    confs = r.obb.conf.cpu().numpy()
-                    cls   = r.obb.cls.cpu().numpy()
-
-                    for i in range(len(boxes)):
-                        detections.append({
-                            "corners":    boxes[i].tolist(),
-                            "confidence": float(confs[i]),
-                            "class":      int(cls[i]),
-                            "label":      model.names[int(cls[i])],
-                        })
-
-                # ── Standard (non-OBB) model fallback ───────────────
-                elif r.boxes is not None and len(r.boxes) > 0:
-                    boxes = r.boxes.xyxy.cpu().numpy()
-                    confs = r.boxes.conf.cpu().numpy()
-                    cls   = r.boxes.cls.cpu().numpy()
-
-                    for i in range(len(boxes)):
-                        detections.append({
-                            "bbox":       boxes[i].tolist(),
-                            "confidence": float(confs[i]),
-                            "class":      int(cls[i]),
-                            "label":      model.names[int(cls[i])],
-                        })
-                # else: no detections this frame — detections stays []
-
-            # Determine product count (product label or class==2)
-            product_count = sum(1 for d in detections if d.get('label') == 'product' or d.get('class') == 2)
+            detections = inference_results["detections"]
+            product_count = inference_results["product_count"]
+            has_person = inference_results["has_person"]
 
             # Server-side box-missing tracking
             try:

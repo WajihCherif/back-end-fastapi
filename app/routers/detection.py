@@ -12,8 +12,7 @@ from ultralytics import YOLO
 router = APIRouter(prefix="/detection", tags=["detection"])
 
 MODEL_PATH = (
-    "C:/Users/wajih/Empty spaces in a supermarket hanger.v29i.yolov8-obb"
-    "/runs/detect/train/weights/best.pt"
+    "C:/Users/wajih/My_Boxes_Project.v2i.yolov8-obb (1)/runs/detect/train/weights/best.pt"
 )
 model = YOLO(MODEL_PATH)
 
