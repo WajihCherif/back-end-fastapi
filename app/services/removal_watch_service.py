@@ -68,22 +68,23 @@ class RemovalWatchService:
 
             try:
                 self.alert_service.create_alert(
-                db=db,
-                product_id=watch.product_id,
-                product_name=product_name,
-                alert_type="missing",
-                expected_quantity=expected_qty,
-                actual_quantity=actual_qty,
-                message=message,
-                quantity_stock=stock.quantity_stock if stock else 0,
+                    db=db,
+                    product_id=watch.product_id,
+                    product_name=product_name,
+                    alert_type="box_missing",
+                    expected_quantity=expected_qty,
+                    actual_quantity=actual_qty,
+                    message=message,
+                    quantity_stock=stock.quantity_stock if stock else 0,
                     quantity_etagere=etagere.quantity_etagere if etagere else 0,
-                quantity_depot=0,
-                stock_id=stock.id if stock else None,
-                etagere_id=etagere.id if etagere else None,
+                    quantity_depot=0,
+                    stock_id=stock.id if stock else None,
+                    etagere_id=etagere.id if etagere else None,
                     depot_id=etagere.depot_id if etagere else None,
                     etagere_code=watch.etagere_code,
-                boxes_missing_count=0,
-                timeout_minutes=self.timeout_minutes
+                    boxes_missing_count=decrement,
+                    state_change_time=watch.last_seen,
+                    timeout_minutes=self.timeout_minutes
                 )
             except Exception as e:
                 logger.exception(f"Failed to create alert for watch id={watch.id}: {e}")

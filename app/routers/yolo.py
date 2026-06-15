@@ -11,18 +11,22 @@ from app.db import SessionLocal
 from app.services.alert_service import AlertService
 from app.models.etagere import Etagere
 # pyrefly: ignore [missing-import]
+# pyrefly: ignore [missing-import]
 from ultralytics import YOLO
-from app.services.ai_service import AIService
 import time
 import json
 import os
+
+YOLO_MODEL_PATH = r"c:\Users\wajih\My_Boxes_Project.v2i.yolov8-obb\runs\obb\train\weights\best.pt"
+yolo_model = YOLO(YOLO_MODEL_PATH) if os.path.exists(YOLO_MODEL_PATH) else YOLO("yolov8n.pt")
+person_model = YOLO("yolov8n.pt")
 
 router = APIRouter(
     prefix="/yolo",
     tags=["yolo"]
 )
 
-ai_service = AIService()
+
 
 
 @router.websocket("/ws")
@@ -56,23 +60,49 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"error": "Invalid image data"})
                 continue
 
-            # Run inference via AIService
-            # To avoid overloading CPU, we only run CLIP once every 1 second per camera.
-            state = camera_states.get(cam_key, {})
-            last_clip_time = state.get('last_clip_time', 0)
-            current_time = time.time()
-            run_clip = False
-            
-            if current_time - last_clip_time >= 1.0:
-                run_clip = True
-                state['last_clip_time'] = current_time
-                # Store back state later
+            # Run inference directly with YOLO
+            person_results = person_model(img, verbose=False)
+            has_person = False
+            for r in person_results:
+                if r.boxes is not None and len(r.boxes) > 0:
+                    cls = r.boxes.cls.cpu().numpy()
+                    if 0 in cls:  # COCO class 0 is person
+                        has_person = True
+                        break
 
-            inference_results = ai_service.predict_frame(img, run_clip=run_clip)
+            results = yolo_model(img, conf=0.15, imgsz=640, verbose=False)
+            detections = []
             
-            detections = inference_results["detections"]
-            product_count = inference_results["product_count"]
-            has_person = inference_results["has_person"]
+            for r in results:
+                if r.obb is not None and len(r.obb) > 0:
+                    boxes = r.obb.xyxyxyxy.cpu().numpy()
+                    confs = r.obb.conf.cpu().numpy()
+                    cls   = r.obb.cls.cpu().numpy()
+                    
+                    for i in range(len(boxes)):
+                        label = yolo_model.names[int(cls[i])]
+                        detections.append({
+                            "corners": boxes[i].tolist(),
+                            "confidence": float(confs[i]),
+                            "class": int(cls[i]),
+                            "label": label,
+                        })
+                        
+                elif r.boxes is not None and len(r.boxes) > 0:
+                    boxes = r.boxes.xyxy.cpu().numpy()
+                    confs = r.boxes.conf.cpu().numpy()
+                    cls   = r.boxes.cls.cpu().numpy()
+                    
+                    for i in range(len(boxes)):
+                        label = yolo_model.names[int(cls[i])]
+                        detections.append({
+                            "bbox": boxes[i].tolist(),
+                            "confidence": float(confs[i]),
+                            "class": int(cls[i]),
+                            "label": label,
+                        })
+
+            product_count = len(detections)
 
             # Server-side box-missing tracking
             try:

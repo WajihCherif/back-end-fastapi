@@ -12,7 +12,7 @@ from ultralytics import YOLO
 router = APIRouter(prefix="/detection", tags=["detection"])
 
 MODEL_PATH = (
-    "C:/Users/wajih/My_Boxes_Project.v2i.yolov8-obb (1)/runs/detect/train/weights/best.pt"
+    r"c:\Users\wajih\My_Boxes_Project.v2i.yolov8-obb\runs\obb\train\weights\best.pt"
 )
 model = YOLO(MODEL_PATH)
 
@@ -123,19 +123,33 @@ def infer_image(file: UploadFile = File(...)):
         results = model.predict(source=tmp.name, conf=0.4, verbose=False)
         detections = []
         for r in results:
-            boxes = r.boxes
-            for b in boxes:
-                cls = int(b.cls.cpu().numpy()) if hasattr(b, 'cls') else None
-                label = results[0].names[cls] if cls is not None and cls in results[0].names else str(cls)
-                conf = float(b.conf.cpu().numpy()) if hasattr(b, 'conf') else None
-                bbox = b.xyxy.cpu().numpy().tolist() if hasattr(b, 'xyxy') else None
-                product_id = DETECTION_MAPPING.get(label)
-                detections.append({
-                    'label': label,
-                    'confidence': conf,
-                    'bbox': bbox,
-                    'product_id': product_id
-                })
+            if r.obb is not None:
+                for b in r.obb:
+                    cls = int(b.cls.cpu().numpy()) if hasattr(b, 'cls') else None
+                    label = results[0].names[cls] if cls is not None and cls in results[0].names else str(cls)
+                    conf = float(b.conf.cpu().numpy()) if hasattr(b, 'conf') else None
+                    bbox = b.xyxyxyxy.cpu().numpy().tolist() if hasattr(b, 'xyxyxyxy') else None
+                    product_id = DETECTION_MAPPING.get(label)
+                    detections.append({
+                        'label': label,
+                        'confidence': conf,
+                        'bbox': bbox,
+                        'product_id': product_id
+                    })
+            else:
+                boxes = r.boxes
+                for b in boxes:
+                    cls = int(b.cls.cpu().numpy()) if hasattr(b, 'cls') else None
+                    label = results[0].names[cls] if cls is not None and cls in results[0].names else str(cls)
+                    conf = float(b.conf.cpu().numpy()) if hasattr(b, 'conf') else None
+                    bbox = b.xyxy.cpu().numpy().tolist() if hasattr(b, 'xyxy') else None
+                    product_id = DETECTION_MAPPING.get(label)
+                    detections.append({
+                        'label': label,
+                        'confidence': conf,
+                        'bbox': bbox,
+                        'product_id': product_id
+                    })
 
         try:
             os.unlink(tmp.name)
