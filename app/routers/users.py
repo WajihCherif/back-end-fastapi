@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Cookie
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -12,7 +12,9 @@ from app.schemas.user import (
     UserRole,
     AdminUserCreate,
 )
-from app.services.user_service import UserService
+from app.services.user_service import UserService, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
+from jose import JWTError, jwt
+from app.core.security import SECRET_KEY, ALGORITHM
 from app.core.security import admin_only
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -47,7 +49,8 @@ def register_user(
 @router.post("/login", response_model=Token)
 def login(
     user_login: UserLogin,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    response: Response = None
 ):
     """
     User login - returns JWT token
@@ -64,11 +67,74 @@ def login(
         data={"sub": user.username, "user_id": user.id, "role": user.role}
     )
 
+    # create refresh token and set it as an HttpOnly cookie
+    refresh_token = user_service.create_refresh_token(
+        data={"sub": user.username, "user_id": user.id, "role": user.role}
+    )
+
+    # set cookie with refresh token
+    if response is not None:
+        max_age = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            samesite="lax",
+            secure=False,
+            max_age=max_age
+        )
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": user
     }
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(
+    response: Response,
+    refresh_token: str = Cookie(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Use the refresh token from HttpOnly cookie to issue a new access token.
+    """
+    if not refresh_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
+
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        # optional: validate token type
+        if payload.get("type") != "refresh":
+            raise JWTError()
+        username: str = payload.get("sub")
+        if username is None:
+            raise JWTError()
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    user = user_service.get_user_by_username(db, username)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # issue new access token
+    access_token = user_service.create_access_token(
+        data={"sub": user.username, "user_id": user.id, "role": user.role}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Clear the refresh token cookie."""
+    response.delete_cookie("refresh_token")
+    return {"message": "Logged out"}
 
 @router.get("/by-username/{username}", response_model=UserResponse)
 def get_user_by_username(
