@@ -61,7 +61,7 @@ class AlertService:
             depot_id=depot_id,
             etagere_code=etagere_code,
             boxes_missing_count=boxes_missing_count,
-            state_change_time=state_change_time or datetime.now(datetime.now().astimezone().tzinfo),
+            state_change_time=state_change_time or datetime.now(),
             timeout_minutes=timeout_minutes
         )
         db.add(alert)

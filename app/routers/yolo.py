@@ -104,7 +104,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             product_count = len(detections)
 
-            # Server-side box-missing tracking
+            # Server-side box-missing tracking (backup — main logic handled by frontend)
             try:
                 if cam_key:
                     state = camera_states.get(cam_key, {
@@ -114,87 +114,90 @@ async def websocket_endpoint(websocket: WebSocket):
                         'missing_since': None,
                         'timeout_minutes': 5,
                         'alert_fired': False,
+                        'initialized': False,
                     })
 
-                    last = state.get('last_count', product_count)
+                    # Skip comparison until we have at least one baseline reading
+                    if not state.get('initialized'):
+                        state['last_count'] = product_count
+                        state['initialized'] = True
+                        camera_states[cam_key] = state
+                    else:
+                        last = state.get('last_count', product_count)
 
-                    async def box_alert_watcher(key, missing_count, timeout_minutes):
-                        await asyncio.sleep(timeout_minutes * 60)
-                        s = websocket.app.state.camera_states.get(key)
-                        # If state missing or alert already fired, skip
-                        if not s or s.get('alert_fired'):
-                            return
-                        current_count = s.get('last_count', 0)
-                        missing = s.get('missing_count', 0)
-                        # If still missing, create alert in DB
-                        if current_count < ( (s.get('missing_count') or missing) + current_count ):
-                            # Resolve etagere and product info from DB
-                            db = SessionLocal()
-                            try:
-                                et = db.query(Etagere).filter(Etagere.etagere_code == key).first()
-                                product_id = et.product_id if et else None
-                                product_name = et.product.name if (et and et.product) else (et.name if et else 'Unknown')
-                                expected_quantity = et.quantity_etagere if et else (current_count + missing)
+                        async def box_alert_watcher(key, missing_count, timeout_minutes):
+                            await asyncio.sleep(timeout_minutes * 60)
+                            s = websocket.app.state.camera_states.get(key)
+                            if not s or s.get('alert_fired'):
+                                return
+                            current_count = s.get('last_count', 0)
+                            still_missing = s.get('missing_count', 0)
+                            # Fire alert only if boxes are still missing
+                            if still_missing > 0 and current_count < (current_count + still_missing):
+                                db = SessionLocal()
+                                try:
+                                    et = db.query(Etagere).filter(Etagere.etagere_code == key).first()
+                                    product_id = et.product_id if et else None
+                                    product_name = et.product.name if (et and et.product) else (et.name if et else 'Unknown')
+                                    expected_quantity = et.quantity_etagere if et else (current_count + still_missing)
+                                    message = (
+                                        f"{still_missing} boîte(s) de \"{product_name}\" manquante(s) "
+                                        f"depuis l'étagère {et.name if et else key} ({key}) "
+                                        f"depuis {timeout_minutes} minute(s)."
+                                    )
+                                    alert_service.create_alert(
+                                        db=db,
+                                        product_id=product_id or 0,
+                                        product_name=product_name or 'Unknown',
+                                        alert_type='box_missing',
+                                        expected_quantity=expected_quantity,
+                                        actual_quantity=current_count,
+                                        message=message,
+                                        quantity_etagere=current_count,
+                                        boxes_missing_count=still_missing,
+                                        state_change_time=s.get('missing_since'),
+                                        timeout_minutes=timeout_minutes,
+                                        etagere_id=et.id if et else None,
+                                        etagere_code=et.etagere_code if et else key,
+                                        stock_id=None,
+                                        depot_id=et.depot_id if et else None
+                                    )
+                                    print(f"[ALERT CREATED] box_missing for cam_key={key}, missing={still_missing}")
+                                    s['alert_fired'] = True
+                                    websocket.app.state.camera_states[key] = s
+                                except Exception as e:
+                                    print(f'Error creating box_missing alert: {e}')
+                                finally:
+                                    db.close()
 
-                                message = f"{missing} box(es) of \"{product_name}\" missing from shelf {et.name if et else key} (code {key}) for {timeout_minutes} minute(s)."
-
-                                alert_service.create_alert(
-                                    db=db,
-                                    product_id=product_id or 0,
-                                    product_name=product_name or 'Unknown',
-                                    alert_type='box_missing',
-                                    expected_quantity=expected_quantity,
-                                    actual_quantity=current_count,
-                                    message=message,
-                                    quantity_etagere=current_count,
-                                    boxes_missing_count=missing,
-                                    state_change_time=s.get('missing_since'),
-                                    timeout_minutes=timeout_minutes,
-                                    etagere_id=et.id if et else None,
-                                    etagere_code=et.etagere_code if et else key,
-                                    stock_id=None,
-                                    depot_id=et.depot_id if et else None
+                        if last > product_count:
+                            missing = last - product_count
+                            if not state.get('timer_task'):
+                                state['missing_count'] = missing
+                                state['missing_since'] = datetime.utcnow()
+                                task = asyncio.create_task(
+                                    box_alert_watcher(cam_key, missing, state.get('timeout_minutes', 5))
                                 )
-                                s['alert_fired'] = True
-                                websocket.app.state.camera_states[key] = s
-                            except Exception as e:
-                                print('Error creating box_missing alert:', e)
-                            finally:
-                                db.close()
-
-                    # Detect decrease
-                    if last > product_count:
-                        missing = last - product_count
-                        # If no watcher running, start one
-                        if not state.get('timer_task'):
-                            state['missing_count'] = missing
-                            state['missing_since'] = datetime.utcnow()
-                            state['timeout_minutes'] = state.get('timeout_minutes', 5)
-                            task = asyncio.create_task(box_alert_watcher(cam_key, state.get('missing_count'), state['timeout_minutes']))
-                            state['timer_task'] = task
+                                state['timer_task'] = task
+                                state['alert_fired'] = False
+                                print(f"[TRACKING] cam={cam_key}, {last} -> {product_count}, {missing} missing, timer started")
+                            else:
+                                state['missing_count'] = missing
+                        elif product_count >= last and last > 0:
+                            if state.get('timer_task'):
+                                t = state['timer_task']
+                                if not t.done():
+                                    t.cancel()
+                                state['timer_task'] = None
+                                print(f"[TRACKING] cam={cam_key}, product returned ({last} -> {product_count}), timer cancelled")
+                            state['missing_count'] = 0
+                            state['missing_since'] = None
                             state['alert_fired'] = False
-                            websocket.app.state.camera_states[cam_key] = state
-                        else:
-                            # update missing count
-                            state['missing_count'] = missing
-                            websocket.app.state.camera_states[cam_key] = state
-                    elif product_count >= last:
-                        # Product(s) returned — cancel any pending timer
-                        if state.get('timer_task'):
-                            t = state.get('timer_task')
-                            if not t.done():
-                                t.cancel()
-                            state['timer_task'] = None
-                        state['missing_count'] = 0
-                        state['missing_since'] = None
-                        state['alert_fired'] = False
-                        websocket.app.state.camera_states[cam_key] = state
 
-                    # Update last_count
-                    state['last_count'] = product_count
-                    websocket.app.state.camera_states[cam_key] = state
+                        state['last_count'] = product_count
+                        camera_states[cam_key] = state
             except Exception as e:
-                print('Box tracking error:', e)
+                print(f'Box tracking error: {e}')
 
             # Send results back to client
             await websocket.send_json({
