@@ -5,9 +5,14 @@ import os
 from dotenv import load_dotenv
 import sys
 
-# Load .env file from the parent directory
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(env_path)
+# Load .env file — first try the app/ directory, then the parent directory
+env_path_app = os.path.join(os.path.dirname(__file__), '.env')
+env_path_parent = os.path.join(os.path.dirname(__file__), '..', '.env')
+
+if os.path.exists(env_path_app):
+    load_dotenv(env_path_app)
+else:
+    load_dotenv(env_path_parent)
 
 # Database URL - hardcode for testing if .env not loading
 DATABASE_URL = os.getenv("DATABASE_URL")
